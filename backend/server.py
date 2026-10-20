@@ -3088,6 +3088,7 @@ async def dispatch_execute(body: DispatchExecuteIn, user=Depends(require_action(
     dispatch_ts = _resolve_dispatch_ts(body.dispatched_at)
     existing = await _find_open_dispatch_today(
         order["customer_id"], order["customer_name"], for_iso_ts=dispatch_ts,
+        price_list_id=cust_price_list,
     )
     if existing:
         merged_items = _merge_dispatch_lines(existing.get("items") or [], dispatched_lines)
@@ -3206,6 +3207,7 @@ async def next_slip_no() -> int:
 async def _find_open_dispatch_today(
     customer_id: Optional[str], customer_name: Optional[str],
     for_iso_ts: Optional[str] = None,
+    price_list_id: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Find an existing dispatch slip created on the SAME business day (IST)
     for the same customer. Used to merge multiple same-day dispatches into a
@@ -3236,6 +3238,9 @@ async def _find_open_dispatch_today(
     else:
         q["customer_id"] = None
         q["customer_name"] = (customer_name or "").strip()
+    # Only merge into a slip priced on the SAME price list — a dispatch made
+    # after the party's list changed gets its own slip.
+    q["price_list_id"] = price_list_id or None
     return await db.dispatches.find_one(q, {"_id": 0}, sort=[("dispatched_at", 1)])
 
 
@@ -4635,8 +4640,8 @@ async def daily_dispatch_report(date: Optional[str] = None, end_date: Optional[s
         for _raw in (d.get("items") or []):
             _stored_unit = float(_raw.get("unit_price") or 0)
             _stored_net = float(_raw.get("net_unit_price") or 0)
-            if _raw.get("price_override") and _stored_net > 0:
-                # Operator manually set a price via Edit dialog — respect it.
+            if _stored_net > 0:
+                # Price frozen on the slip at dispatch time (or manual edit) — respect it.
                 eff_unit = _stored_unit if _stored_unit > 0 else _stored_net
                 eff_net = _stored_net
             else:
@@ -4677,7 +4682,7 @@ async def daily_dispatch_report(date: Optional[str] = None, end_date: Optional[s
             # operator's saved net/unit price verbatim. Otherwise recompute
             # LIVE against the customer's currently-assigned price list +
             # discounts, so the report reflects any list changes.
-            if line.get("price_override") and float(line.get("net_unit_price") or 0) > 0:
+            if float(line.get("net_unit_price") or 0) > 0:
                 unit_price = float(line.get("unit_price") or 0)
                 discount_value = float(line.get("discount_value") or 0)
                 discount_type = line.get("discount_type") or ""
@@ -6262,7 +6267,7 @@ async def dispatch_off_order(body: OffOrderDispatchIn, user=Depends(require_acti
     # MERGE into today's existing slip for this customer if one exists, so
     # multiple same-day dispatches to one party produce ONE slip.
     dispatch_ts = _resolve_dispatch_ts(body.dispatched_at)
-    existing = await _find_open_dispatch_today(customer_id, customer_name, for_iso_ts=dispatch_ts)
+    existing = await _find_open_dispatch_today(customer_id, customer_name, for_iso_ts=dispatch_ts, price_list_id=cust_price_list)
     if existing:
         merged_items = _merge_dispatch_lines(existing.get("items") or [], dispatched_lines)
         merged_total_pcs = sum(int(it.get("quantity") or 0) for it in merged_items)
