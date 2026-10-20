@@ -168,6 +168,13 @@ export default function Orders() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, loading]);
   const activeMatchId = matchIds[matchIdx];
+  // Clicking any non-matching order ends the search and freezes the page right there.
+  const stopSearchAt = (orderId) => {
+    if (!q.trim() || matchSet.has(orderId)) return;
+    window.scrollTo({ top: window.scrollY, behavior: "auto" });
+    setQ("");
+    setMatchIdx(0);
+  };
 
   const updateStatus = async (id, status) => {
     try {
@@ -310,7 +317,7 @@ export default function Orders() {
         ) : (
           <div className="divide-y divide-slate-100">
             {filtered.map((o) => (
-              <div key={o.id} className={`scroll-mt-24 p-4 sm:p-5 hover:bg-slate-50 transition-colors ${o.id === highlightId || o.id === activeMatchId ? "bg-amber-100 ring-2 ring-inset ring-[#E65100]" : matchSet.has(o.id) ? "bg-orange-50 border-l-4 border-l-[#E65100]" : (o.is_overdue ? "bg-rose-50/40 border-l-2 border-l-rose-400" : "")} ${q.trim() && !matchSet.has(o.id) ? "opacity-60" : ""}`} data-testid={`order-row-${o.id}`} data-search-match={matchSet.has(o.id) ? "true" : undefined}>
+              <div key={o.id} className={`scroll-mt-24 p-4 sm:p-5 hover:bg-slate-50 transition-colors ${o.id === highlightId || o.id === activeMatchId ? "bg-amber-100 ring-2 ring-inset ring-[#E65100]" : matchSet.has(o.id) ? "bg-orange-50 border-l-4 border-l-[#E65100]" : (o.is_overdue ? "bg-rose-50/40 border-l-2 border-l-rose-400" : "")} ${q.trim() && !matchSet.has(o.id) ? "opacity-60" : ""}`} data-testid={`order-row-${o.id}`} data-search-match={matchSet.has(o.id) ? "true" : undefined} onClick={() => stopSearchAt(o.id)}>
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="flex-1 min-w-[200px]">
                     <div className="flex items-center gap-2 flex-wrap">
