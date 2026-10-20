@@ -159,7 +159,12 @@ export default function Orders() {
     const i = (idx + matchIds.length) % matchIds.length;
     setMatchIdx(i);
     const el = document.querySelector(`[data-testid="order-row-${matchIds[i]}"]`);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!el) return;
+    // Land the match just below the sticky top bar + search bar.
+    const bar = document.querySelector('[data-testid="orders-search-bar"]');
+    const topbarH = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--topbar-h"), 10) || 64;
+    const offset = topbarH + (bar ? bar.offsetHeight : 64) + 8;
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - offset, behavior: "smooth" });
   };
   useEffect(() => {
     if (!q.trim()) return;
@@ -251,33 +256,36 @@ export default function Orders() {
         : <ResyncOrders className="w-full" onApplied={() => load({ silent: true })} />)}
 
       <div className="bg-white border border-slate-200 rounded-sm">
-        <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row gap-3 sm:items-center">
-          <div className="relative flex-1 w-full">
+        <div className="sticky top-[var(--topbar-h,64px)] z-20 bg-white p-3 sm:p-4 border-b border-slate-200 flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center shadow-[0_6px_12px_-10px_rgba(15,23,42,0.25)]" data-testid="orders-search-bar">
+          <div className="flex items-center gap-1.5 w-full sm:flex-1 min-w-0">
+          <div className="relative flex-1 min-w-0">
             <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <Input data-testid="orders-search" placeholder={t("orders.searchPlaceholder")}
                    value={q} onChange={(e) => setQ(e.target.value)}
                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); jumpToMatch(e.shiftKey ? matchIdx - 1 : matchIdx + 1); } }}
-                   className="pl-11 h-12 text-base rounded-sm" />
+                   className="pl-11 h-11 sm:h-12 text-base rounded-sm" />
           </div>
           {q.trim() && (
             <div className="flex items-center gap-1.5 shrink-0" data-testid="orders-search-nav">
               <span className="text-sm font-bold text-slate-700 font-mono-num whitespace-nowrap px-1" data-testid="orders-search-count">
                 {matchIds.length ? `${matchIdx + 1} / ${matchIds.length}` : "0 / 0"}
               </span>
-              <Button type="button" variant="outline" size="icon" className="h-12 w-11 rounded-sm"
+              <Button type="button" variant="outline" size="icon" className="h-11 sm:h-12 w-10 sm:w-11 rounded-sm"
                       disabled={!matchIds.length} onClick={() => jumpToMatch(matchIdx - 1)}
                       data-testid="orders-search-prev" title="Previous match">
                 <ChevronUp className="w-4 h-4" />
               </Button>
-              <Button type="button" variant="outline" size="icon" className="h-12 w-11 rounded-sm"
+              <Button type="button" variant="outline" size="icon" className="h-11 sm:h-12 w-10 sm:w-11 rounded-sm"
                       disabled={!matchIds.length} onClick={() => jumpToMatch(matchIdx + 1)}
                       data-testid="orders-search-next" title="Next match">
                 <ChevronDown className="w-4 h-4" />
               </Button>
             </div>
           )}
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
           <Select value={filter} onValueChange={setFilter}>
-            <SelectTrigger data-testid="orders-filter" className="w-full sm:w-52 h-12 rounded-sm text-base">
+            <SelectTrigger data-testid="orders-filter" className="flex-1 sm:flex-none sm:w-52 h-11 sm:h-12 rounded-sm text-base">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -301,11 +309,12 @@ export default function Orders() {
           {discCount > 0 && filter !== "discrepancy" && (
             <button type="button" onClick={() => setFilter("discrepancy")}
                     data-testid="orders-discrepancy-pill"
-                    className="inline-flex items-center gap-1.5 h-12 px-3 rounded-sm border border-amber-300 bg-amber-50 text-amber-800 text-sm font-bold hover:bg-amber-100 transition whitespace-nowrap">
+                    className="inline-flex items-center gap-1.5 h-11 sm:h-12 px-3 rounded-sm border border-amber-300 bg-amber-50 text-amber-800 text-sm font-bold hover:bg-amber-100 transition whitespace-nowrap">
               <AlertTriangle className="w-4 h-4" />
               {discCount}
             </button>
           )}
+          </div>
         </div>
 
         {loading ? (

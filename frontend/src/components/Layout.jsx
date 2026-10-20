@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
@@ -45,6 +45,17 @@ const SETTINGS_NAV = [
 export default function Layout() {
   const { user, logout, isAdmin, can } = useAuth();
   const { t } = useTranslation();
+  const topbarRef = useRef(null);
+  // Expose the top bar height so page-level sticky bars can sit right below it.
+  useEffect(() => {
+    const el = topbarRef.current;
+    if (!el) return;
+    const set = () => document.documentElement.style.setProperty("--topbar-h", `${el.offsetHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const nav = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
@@ -163,7 +174,7 @@ export default function Layout() {
             controls inside stay below the dynamic island / notch, and the
             white bg fills the status-bar strip on iPhone PWA. */}
         <header
-          className="sticky top-0 z-30 bg-white border-b border-slate-200 flex items-center gap-2 sm:gap-3 pt-[env(safe-area-inset-top)] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] sm:pl-[calc(1.5rem+env(safe-area-inset-left))] sm:pr-[calc(1.5rem+env(safe-area-inset-right))]"
+          ref={topbarRef} className="sticky top-0 z-30 bg-white border-b border-slate-200 flex items-center gap-2 sm:gap-3 pt-[env(safe-area-inset-top)] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] sm:pl-[calc(1.5rem+env(safe-area-inset-left))] sm:pr-[calc(1.5rem+env(safe-area-inset-right))]"
           style={{ minHeight: "calc(3.5rem + env(safe-area-inset-top))" }}
         >
           <button data-testid="mobile-menu-btn" className="md:hidden p-2 -ml-2" onClick={() => setOpen(!open)}>
