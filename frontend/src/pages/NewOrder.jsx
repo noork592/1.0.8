@@ -139,9 +139,15 @@ export default function NewOrder() {
       // Auto-open the choice dialog when the picked party already has
       // pending orders so the operator deliberately picks merge / clear /
       // keep-separate before keying in the new order's items.
-      if (list.length > 0) {
+      const mode = selectedCustomer.order_handling_mode;
+      if (list.length > 0 && mode === "clear") {
+        setPendingChoice("clear");
+        toast.info(`Clear Previous: ${list.length} pending order(s) will be cleared when you save`);
+      } else if (list.length > 0 && mode !== "retain") {
         setPendingChoice("none");
         setPendingDialogOpen(true);
+      } else {
+        setPendingChoice("none");
       }
     });
     api.get("/orders").then((r) => {

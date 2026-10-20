@@ -12,7 +12,7 @@ import base64
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 import uuid
 from datetime import datetime, timezone, timedelta
 import jwt
@@ -281,6 +281,7 @@ class CustomerIn(BaseModel):
     private_mark: Optional[str] = ""     # stenciled mark on packages for this party
     bill_number_mode: Optional[bool] = False  # if True, this party uses a manually-typed Bill Number at dispatch instead of a Private Marka
     blocked_items: List[str] = []        # item_ids that must never be ordered/dispatched for this party
+    order_handling_mode: Optional[Literal["clear", "retain"]] = "retain"  # clear = new order clears old pending ones
 
 
 class CustomerUpdate(BaseModel):
@@ -295,6 +296,7 @@ class CustomerUpdate(BaseModel):
     private_mark: Optional[str] = None
     bill_number_mode: Optional[bool] = None
     blocked_items: Optional[List[str]] = None
+    order_handling_mode: Optional[Literal["clear", "retain"]] = None
 
 
 class OrderItemIn(BaseModel):
@@ -2001,6 +2003,13 @@ async def create_order(body: OrderIn, user=Depends(require_action("add:orders"))
                 status_code=400,
                 detail=f"These items are blocked for {cust.get('name') or 'this party'}: {', '.join(names)}",
             )
+
+    # Party-level "Order Handling Mode" overrides the per-order choice.
+    mode = cust.get("order_handling_mode")
+    if mode == "clear":
+        body.clear_previous_pending, body.merge_with_pending = True, False
+    elif mode == "retain":
+        body.clear_previous_pending, body.merge_with_pending = False, False
 
     # If clear_previous_pending: mark all this customer's pending orders as Cleared
     if body.clear_previous_pending:

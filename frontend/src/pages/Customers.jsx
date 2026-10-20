@@ -34,11 +34,11 @@ export default function Customers() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: "", phone: "", address: "", city: "", location: "", transport_name: "", private_mark: "", bill_number_mode: false, price_list_id: "" });
+  const [form, setForm] = useState({ name: "", phone: "", address: "", city: "", location: "", transport_name: "", private_mark: "", bill_number_mode: false, price_list_id: "", order_handling_mode: "retain" });
   const [editing, setEditing] = useState(null);
   const [editPrefs, setEditPrefs] = useState({});
   const [editDetails, setEditDetails] = useState(null); // admin: name/phone/address edit
-  const [detailsForm, setDetailsForm] = useState({ name: "", phone: "", address: "", city: "", location: "", transport_name: "", private_mark: "", bill_number_mode: false, price_list_id: "" });
+  const [detailsForm, setDetailsForm] = useState({ name: "", phone: "", address: "", city: "", location: "", transport_name: "", private_mark: "", bill_number_mode: false, price_list_id: "", order_handling_mode: "retain" });
   // Bulk selection (admin)
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   // Bulk import dialog
@@ -76,7 +76,7 @@ export default function Customers() {
         price_list_id: form.price_list_id || null,
       });
       toast.success(t("customers.added"));
-      setShowAdd(false); setForm({ name: "", phone: "", address: "", city: "", location: "", transport_name: "", private_mark: "", bill_number_mode: false, price_list_id: "" });
+      setShowAdd(false); setForm({ name: "", phone: "", address: "", city: "", location: "", transport_name: "", private_mark: "", bill_number_mode: false, price_list_id: "", order_handling_mode: "" });
       load();
     } catch (e) { toast.error(e?.response?.data?.detail || t("common.failed")); }
   };
@@ -107,6 +107,7 @@ export default function Customers() {
       private_mark: c.private_mark || "",
       bill_number_mode: !!c.bill_number_mode,
       price_list_id: c.price_list_id || "",
+      order_handling_mode: c.order_handling_mode || "",
     });
   };
 
@@ -116,6 +117,7 @@ export default function Customers() {
       await api.patch(`/customers/${editDetails.id}`, {
         ...detailsForm,
         price_list_id: detailsForm.price_list_id || null,
+        order_handling_mode: detailsForm.order_handling_mode || null,
       });
       toast.success(t("customers.detailsUpdated"));
       setEditDetails(null);
@@ -486,6 +488,11 @@ export default function Customers() {
                 ))}
               </select>
             </div>
+            <OrderHandlingModeField
+              value={form.order_handling_mode}
+              onChange={(v) => setForm((p) => ({ ...p, order_handling_mode: v }))}
+              testId="cust-add-order-mode"
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)} className="rounded-sm">{t("common.cancel")}</Button>
@@ -631,6 +638,11 @@ export default function Customers() {
                 ))}
               </select>
             </div>
+            <OrderHandlingModeField
+              value={detailsForm.order_handling_mode}
+              onChange={(v) => setDetailsForm((p) => ({ ...p, order_handling_mode: v }))}
+              testId="cust-edit-order-mode"
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDetails(null)} className="rounded-sm">
@@ -753,6 +765,28 @@ export default function Customers() {
         customer={blockedCustomer}
         onSaved={load}
       />
+    </div>
+  );
+}
+
+function OrderHandlingModeField({ value, onChange, testId }) {
+  return (
+    <div>
+      <Label className="text-xs font-bold uppercase">Order Handling Mode</Label>
+      <Select value={value || undefined} onValueChange={onChange}>
+        <SelectTrigger data-testid={testId} className="mt-1 h-11 rounded-sm">
+          <SelectValue placeholder="Not set — ask on each new order" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="clear" data-testid={`${testId}-clear`}>Clear Previous</SelectItem>
+          <SelectItem value="retain" data-testid={`${testId}-retain`}>Retain Previous</SelectItem>
+        </SelectContent>
+      </Select>
+      <p className="text-[11px] text-slate-400 mt-1">
+        {value === "clear" ? "A new order clears this party's old pending orders."
+          : value === "retain" ? "A new order is added and old pending orders are kept."
+          : "You'll be asked each time this party has pending orders."}
+      </p>
     </div>
   );
 }
