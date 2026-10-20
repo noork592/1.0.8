@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import ActivityLogDialog from "@/components/ActivityLogDialog";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, MapPin, RefreshCcw, X, Camera, CheckCircle2, AlertTriangle } from "lucide-react";
@@ -25,6 +26,7 @@ function mapsLink(lat, lng) {
 export default function LoginAttestations() {
   const { t } = useTranslation();
   const [items, setItems] = useState([]);
+  const [activityUser, setActivityUser] = useState(null);
   const [total, setTotal] = useState(0);
   const [skip, setSkip] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -98,7 +100,14 @@ export default function LoginAttestations() {
               <div className="font-mono-num text-[11px] text-slate-600 whitespace-nowrap shrink-0">{fmtDate(r.created_at)}</div>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-              <span className="font-mono-num text-slate-500">{r.ip || "—"}</span>
+              <span
+                role="button"
+                onClick={(e) => { e.stopPropagation(); setActivityUser(r); }}
+                className="font-mono-num text-[#E65100] font-bold underline decoration-dotted underline-offset-2"
+                data-testid={`attestation-card-ip-${r.id}`}
+              >
+                {r.ip || "—"}
+              </span>
               {r.latitude != null && r.longitude != null ? (
                 <a href={mapsLink(r.latitude, r.longitude)} target="_blank" rel="noreferrer"
                    onClick={(e) => e.stopPropagation()}
@@ -152,7 +161,17 @@ export default function LoginAttestations() {
                   <div className="font-bold text-slate-800">{r.user_name || r.username}</div>
                   <div className="text-[11px] text-slate-500">{r.user_email}</div>
                 </td>
-                <td className="px-4 py-2 font-mono-num text-xs text-slate-600">{r.ip || "—"}</td>
+                <td className="px-4 py-2 font-mono-num text-xs">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setActivityUser(r); }}
+                    className="text-[#E65100] font-bold underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                    title="View this user's activity log"
+                    data-testid={`attestation-ip-${r.id}`}
+                  >
+                    {r.ip || "—"}
+                  </button>
+                </td>
                 <td className="px-4 py-2 text-xs">
                   {r.latitude != null && r.longitude != null ? (
                     <a href={mapsLink(r.latitude, r.longitude)} target="_blank" rel="noreferrer"
@@ -248,6 +267,7 @@ export default function LoginAttestations() {
           </div>
         </div>
       )}
+      <ActivityLogDialog user={activityUser} onClose={() => setActivityUser(null)} />
     </div>
   );
 }
