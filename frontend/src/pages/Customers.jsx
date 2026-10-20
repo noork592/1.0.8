@@ -397,7 +397,7 @@ export default function Customers() {
 
       {/* Add Customer Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="rounded-sm">
+        <DialogContent className="rounded-sm max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-heading">{t("customers.addTitle")}</DialogTitle>
             <DialogDescription>{t("customers.addSub")}</DialogDescription>
@@ -456,7 +456,7 @@ export default function Customers() {
                            setForm((p) => ({ ...p, private_mark: v, bill_number_mode: v ? p.bill_number_mode : false }));
                          }
                        }}
-                       placeholder="Type mark (letters) — digits switch to Bill Number"
+                       placeholder="Mark, e.g. AB"
                        data-testid="cust-add-private-mark"
                        className="h-11 rounded-sm disabled:bg-slate-100 disabled:text-slate-400" />
                 <Select
@@ -494,7 +494,7 @@ export default function Customers() {
               testId="cust-add-order-mode"
             />
           </div>
-          <DialogFooter>
+          <DialogFooter className="sticky -bottom-6 bg-white -mx-6 px-6 py-3 border-t border-slate-200 -mb-6">
             <Button variant="outline" onClick={() => setShowAdd(false)} className="rounded-sm">{t("common.cancel")}</Button>
             <Button onClick={save} data-testid="cust-add-save"
                     className="bg-[#E65100] hover:bg-[#CC4800] text-white rounded-sm">{t("common.save")}</Button>
@@ -544,7 +544,7 @@ export default function Customers() {
       </Dialog>
       {/* Edit Customer Details Dialog (admin) */}
       <Dialog open={!!editDetails} onOpenChange={(o) => !o && setEditDetails(null)}>
-        <DialogContent className="rounded-sm">
+        <DialogContent className="rounded-sm max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-heading">{t("customers.editDetailsTitle", { name: editDetails?.name })}</DialogTitle>
             <DialogDescription>{t("customers.editDetailsSub")}</DialogDescription>
@@ -606,7 +606,7 @@ export default function Customers() {
                            setDetailsForm((p) => ({ ...p, private_mark: v, bill_number_mode: v ? p.bill_number_mode : false }));
                          }
                        }}
-                       placeholder="Type mark (letters) — digits switch to Bill Number"
+                       placeholder="Mark, e.g. AB"
                        data-testid="cust-edit-private-mark"
                        className="h-11 rounded-sm disabled:bg-slate-100 disabled:text-slate-400" />
                 <Select
@@ -644,7 +644,7 @@ export default function Customers() {
               testId="cust-edit-order-mode"
             />
           </div>
-          <DialogFooter>
+          <DialogFooter className="sticky -bottom-6 bg-white -mx-6 px-6 py-3 border-t border-slate-200 -mb-6">
             <Button variant="outline" onClick={() => setEditDetails(null)} className="rounded-sm">
               <X className="w-4 h-4 mr-1" /> {t("common.cancel")}
             </Button>
