@@ -4184,6 +4184,24 @@ async def delete_price_list(plid: str, admin=Depends(require_action("delete:pric
     return {"ok": True, "deleted": plid}
 
 
+class PriceListMoveCustomersIn(BaseModel):
+    from_price_list_id: str
+
+
+@api_router.post("/price-lists/{plid}/move-customers")
+async def move_price_list_customers(plid: str, body: PriceListMoveCustomersIn,
+                                    admin=Depends(require_action("edit:priceLists"))):
+    """Bulk re-link every customer on `from_price_list_id` to this list."""
+    if plid == body.from_price_list_id:
+        raise HTTPException(status_code=400, detail="Pick a different price list")
+    for pid in (plid, body.from_price_list_id):
+        if not await db.price_lists.find_one({"id": pid}, {"_id": 1}):
+            raise HTTPException(status_code=404, detail="Price list not found")
+    res = await db.customers.update_many(
+        {"price_list_id": body.from_price_list_id}, {"$set": {"price_list_id": plid}})
+    return {"ok": True, "moved": res.modified_count}
+
+
 @api_router.post("/price-lists/{plid}/clone")
 async def clone_price_list(plid: str, body: PriceListCloneIn, admin=Depends(require_action("add:priceLists"))):
     """Duplicate an existing price list under a new name, copying every

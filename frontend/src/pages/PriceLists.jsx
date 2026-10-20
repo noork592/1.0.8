@@ -31,7 +31,8 @@ export default function PriceLists() {
   const [lists, setLists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "" });
+  const [form, setForm] = useState({ name: "", description: "", from_id: "", copy_prices: true });
+  const [cloneMoveCustomers, setCloneMoveCustomers] = useState(false);
   // Clone dialog state — separate from the "new price list" flow so the
   // source list stays selected while the admin picks a new name.
   const [cloneSource, setCloneSource] = useState(null);
@@ -74,10 +75,18 @@ export default function PriceLists() {
   const createList = async () => {
     if (!form.name.trim()) { toast.error("Name required"); return; }
     try {
-      const { data } = await api.post("/price-lists", form);
-      toast.success(`Price list "${data.name}" created`);
+      const payload = { name: form.name, description: form.description };
+      const { data } = form.from_id && form.copy_prices
+        ? await api.post(`/price-lists/${form.from_id}/clone`, payload)
+        : await api.post("/price-lists", payload);
+      let msg = `Price list "${data.name}" created`;
+      if (form.from_id) {
+        const mv = await api.post(`/price-lists/${data.id}/move-customers`, { from_price_list_id: form.from_id });
+        msg += ` · ${mv.data.moved} customer(s) moved`;
+      }
+      toast.success(msg);
       setShowAdd(false);
-      setForm({ name: "", description: "" });
+      setForm({ name: "", description: "", from_id: "", copy_prices: true });
       loadLists();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Failed");
@@ -180,6 +189,7 @@ export default function PriceLists() {
     if (cloning) return;
     setCloneSource(null);
     setCloneName("");
+    setCloneMoveCustomers(false);
   };
 
   const submitClone = async () => {
@@ -199,9 +209,16 @@ export default function PriceLists() {
         `/price-lists/${cloneSource.id}/clone`,
         { name },
       );
+      let moved = null;
+      if (cloneMoveCustomers) {
+        const mv = await api.post(`/price-lists/${data.id}/move-customers`, { from_price_list_id: cloneSource.id });
+        moved = mv.data.moved;
+      }
       toast.success(
-        `Cloned "${cloneSource.name}" → "${data.name}" (${data.items_copied} items, ${data.discounts_copied} discounts)`,
+        `Cloned "${cloneSource.name}" → "${data.name}" (${data.items_copied} items, ${data.discounts_copied} discounts)` +
+        (moved !== null ? ` · ${moved} customer(s) moved` : ""),
       );
+      setCloneMoveCustomers(false);
       setCloneSource(null);
       setCloneName("");
       loadLists();
@@ -498,6 +515,40 @@ export default function PriceLists() {
                   className="rounded-sm mt-1"
                 />
               </div>
+              {canEdit && lists.length > 0 && (
+              <div className="border border-orange-200 bg-orange-50/50 rounded-sm p-3 space-y-2">
+                <Label className="text-xs font-bold uppercase">Replace an old price list (optional)</Label>
+                <select
+                  value={form.from_id}
+                  onChange={(e) => setForm((p) => ({ ...p, from_id: e.target.value }))}
+                  data-testid="price-list-replace-from-select"
+                  className="w-full h-11 rounded-sm border border-slate-300 px-3 text-sm bg-white"
+                >
+                  <option value="">— Don't move any customers —</option>
+                  {lists.map((pl) => (
+                    <option key={pl.id} value={pl.id}>{pl.name} ({pl.customers_count || 0} customers)</option>
+                  ))}
+                </select>
+                {form.from_id && (
+                  <>
+                    <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.copy_prices}
+                        onChange={(e) => setForm((p) => ({ ...p, copy_prices: e.target.checked }))}
+                        data-testid="price-list-replace-copy-prices"
+                        className="w-4 h-4 accent-[#E65100]"
+                      />
+                      Start with the old list's prices &amp; discounts
+                    </label>
+                    <p className="text-[11px] text-slate-500" data-testid="price-list-replace-hint">
+                      All {lists.find((l) => l.id === form.from_id)?.customers_count || 0} customer(s) on
+                      "{lists.find((l) => l.id === form.from_id)?.name}" will be linked to the new list.
+                    </p>
+                  </>
+                )}
+              </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAdd(false)} className="rounded-sm">
@@ -558,6 +609,18 @@ export default function PriceLists() {
                   placeholder="e.g. Wholesale 2025"
                 />
               </div>
+              {canEdit && (cloneSource?.customers_count || 0) > 0 && (
+                <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={cloneMoveCustomers}
+                    onChange={(e) => setCloneMoveCustomers(e.target.checked)}
+                    data-testid="clone-move-customers-checkbox"
+                    className="w-4 h-4 accent-[#E65100]"
+                  />
+                  Also move all {cloneSource.customers_count} linked customer(s) to the new list
+                </label>
+              )}
             </div>
             <DialogFooter>
               <Button
