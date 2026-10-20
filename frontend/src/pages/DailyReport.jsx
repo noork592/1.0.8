@@ -149,8 +149,8 @@ export default function DailyReport() {
    * Walks every dispatch under the party and the party-level customer
    * buffer, batching the PATCH calls and refreshing once at the end.
    */
-  const saveAllForParty = async (cid, dispatches) => {
-    const custBuf = edits[`customer:${cid}`] || {};
+  const saveAllForParty = async (cid, dispatches, gkey = cid) => {
+    const custBuf = edits[`customer:${gkey}`] || {};
     const dispatchBufs = (dispatches || [])
       .map((d) => ({ id: d.id, can_edit: d.can_edit !== false, buf: edits[`dispatch:${d.id}`] || {} }))
       .filter((x) => Object.keys(x.buf).length > 0);
@@ -160,7 +160,7 @@ export default function DailyReport() {
     const hasBags = custBuf.bag_count !== undefined && custBuf.bag_count !== "" && !Number.isNaN(Number(custBuf.bag_count));
     if (!hasMark && !hasBill && !hasBags && dispatchBufs.length === 0) return;
 
-    setSavingKey(`party:${cid}`);
+    setSavingKey(`party:${gkey}`);
     try {
       // 1) Dispatch-level fields (GR + bill amount)
       for (const { id, can_edit, buf } of dispatchBufs) {
@@ -194,7 +194,7 @@ export default function DailyReport() {
       // Clear all buffers for this party
       setEdits((e) => {
         const n = { ...e };
-        delete n[`customer:${cid}`];
+        delete n[`customer:${gkey}`];
         for (const { id } of dispatchBufs) delete n[`dispatch:${id}`];
         return n;
       });
@@ -256,7 +256,7 @@ export default function DailyReport() {
         // Unique key per rendered block. In range mode the same party can
         // appear once per day, so include the day to keep React keys and
         // collapse state distinct.
-        _gkey: isRange && g.day ? `${g.day}|${g.customer_id}` : g.customer_id,
+        _gkey: g.group_key || (isRange && g.day ? `${g.day}|${g.customer_id}` : g.customer_id),
         dispatches: [...(g.dispatches || [])].sort((a, b) => slipNo(b) - slipNo(a)),
       }))
       .sort((a, b) => {
@@ -497,17 +497,17 @@ body { padding: 12mm; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI"
             // (party — stored on first dispatch), and every dispatch under
             // it must have both a GR number and a non-zero bill amount.
             // GREEN = complete, DARK RED = anything missing.
-            const partyPvtEdit = customerEdit(g.customer_id, "private_mark");
+            const partyPvtEdit = customerEdit(g._gkey, "private_mark");
             const effPvtMark = partyPvtEdit !== undefined ? partyPvtEdit : (g.private_mark || "");
             const hasPvt = !!(effPvtMark && String(effPvtMark).trim());
             // Bill-number-mode parties satisfy the "mark" requirement with a
             // Bill Number (stored per dispatch) instead of a private mark.
             const billMode = !!g.bill_number_mode;
-            const billNoEdit = customerEdit(g.customer_id, "bill_number");
+            const billNoEdit = customerEdit(g._gkey, "bill_number");
             const effBillNo = billNoEdit !== undefined ? billNoEdit : ((g.dispatches || [])[0]?.bill_number || "");
             const hasBillNo = !!(effBillNo && String(effBillNo).trim());
             const hasMarkReq = billMode ? hasBillNo : hasPvt;
-            const bagEdit = customerEdit(g.customer_id, "bag_count");
+            const bagEdit = customerEdit(g._gkey, "bag_count");
             const dsp0 = (g.dispatches || [])[0];
             const effBags = bagEdit !== undefined ? Number(bagEdit || 0) : Number(dsp0?.bag_count || 0);
             const hasBags = effBags > 0;
@@ -667,11 +667,11 @@ body { padding: 12mm; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI"
                           <div className="font-bold text-slate-900 mt-0.5" data-testid={`report-print-pvtmark-${g.customer_id}`}>
                             {(() => {
                               if (g.bill_number_mode) {
-                                const bbuf = customerEdit(g.customer_id, "bill_number");
+                                const bbuf = customerEdit(g._gkey, "bill_number");
                                 const bval = bbuf !== undefined ? bbuf : ((g.dispatches || [])[0]?.bill_number || "");
                                 return String(bval).trim() || "—";
                               }
-                              const buf = customerEdit(g.customer_id, "private_mark");
+                              const buf = customerEdit(g._gkey, "private_mark");
                               const val = buf !== undefined ? buf : (g.private_mark || "");
                               return String(val).trim() || "—";
                             })()}
@@ -683,7 +683,7 @@ body { padding: 12mm; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI"
                           </div>
                           <div className="font-bold text-slate-900 mt-0.5 font-mono-num" data-testid={`report-print-bags-${g.customer_id}`}>
                             {(() => {
-                              const buf = customerEdit(g.customer_id, "bag_count");
+                              const buf = customerEdit(g._gkey, "bag_count");
                               const dsp0 = (g.dispatches || [])[0];
                               const savedBags = Number(dsp0?.bag_count || 0);
                               const val = buf !== undefined ? Number(buf || 0) : savedBags;
@@ -885,11 +885,11 @@ body { padding: 12mm; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI"
                                 {g.bill_number_mode ? (
                                   <Input
                                     value={
-                                      customerEdit(g.customer_id, "bill_number") !== undefined
-                                        ? customerEdit(g.customer_id, "bill_number")
+                                      customerEdit(g._gkey, "bill_number") !== undefined
+                                        ? customerEdit(g._gkey, "bill_number")
                                         : ((g.dispatches || [])[0]?.bill_number || "")
                                     }
-                                    onChange={(e) => updEdit("customer", g.customer_id, { bill_number: e.target.value })}
+                                    onChange={(e) => updEdit("customer", g._gkey, { bill_number: e.target.value })}
                                     placeholder="Enter Bill Number Here"
                                     data-testid={`report-billnumber-input-${g.customer_id}`}
                                     className="h-9 rounded-sm mt-0.5 border-indigo-400 focus-visible:ring-indigo-400 bg-indigo-50/40"
@@ -897,11 +897,11 @@ body { padding: 12mm; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI"
                                 ) : (
                                   <Input
                                     value={
-                                      customerEdit(g.customer_id, "private_mark") !== undefined
-                                        ? customerEdit(g.customer_id, "private_mark")
+                                      customerEdit(g._gkey, "private_mark") !== undefined
+                                        ? customerEdit(g._gkey, "private_mark")
                                         : (g.private_mark || "")
                                     }
-                                    onChange={(e) => updEdit("customer", g.customer_id, { private_mark: e.target.value })}
+                                    onChange={(e) => updEdit("customer", g._gkey, { private_mark: e.target.value })}
                                     placeholder="e.g. AB"
                                     data-testid={`report-pvtmark-input-${g.customer_id}`}
                                     className="h-9 rounded-sm mt-0.5"
@@ -909,7 +909,7 @@ body { padding: 12mm; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI"
                                 )}
                               </div>
                               {(() => {
-                                const bagBuf = customerEdit(g.customer_id, "bag_count");
+                                const bagBuf = customerEdit(g._gkey, "bag_count");
                                 const dsp0 = (g.dispatches || [])[0];
                                 const savedBags = Number(dsp0?.bag_count || 0);
                                 const bagVal = bagBuf !== undefined ? bagBuf : (savedBags > 0 ? String(savedBags) : "");
@@ -920,9 +920,9 @@ body { padding: 12mm; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI"
                                       type="number" min="0" step="1"
                                       value={bagVal}
                                       placeholder="Bags"
-                                      onChange={(e) => updEdit("customer", g.customer_id, { bag_count: e.target.value })}
-                                      onFocus={(e) => { if (parseInt(bagVal || "0", 10) === 0) updEdit("customer", g.customer_id, { bag_count: "" }); e.target.select(); }}
-                                      onBlur={() => { if (bagVal === "" || bagVal === "-") updEdit("customer", g.customer_id, { bag_count: "0" }); }}
+                                      onChange={(e) => updEdit("customer", g._gkey, { bag_count: e.target.value })}
+                                      onFocus={(e) => { if (parseInt(bagVal || "0", 10) === 0) updEdit("customer", g._gkey, { bag_count: "" }); e.target.select(); }}
+                                      onBlur={() => { if (bagVal === "" || bagVal === "-") updEdit("customer", g._gkey, { bag_count: "0" }); }}
                                       data-testid={`report-bags-input-${g.customer_id}`}
                                       className="no-spinner h-9 rounded-sm mt-0.5 font-mono-num text-right"
                                     />
@@ -941,19 +941,19 @@ body { padding: 12mm; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI"
                           {(() => {
                             // Single save button gathers dirty state across
                             // every dispatch row AND the party-level fields.
-                            const partyDirty = customerEdit(g.customer_id, "private_mark") !== undefined
-                              || customerEdit(g.customer_id, "bill_number") !== undefined
-                              || customerEdit(g.customer_id, "bag_count") !== undefined;
+                            const partyDirty = customerEdit(g._gkey, "private_mark") !== undefined
+                              || customerEdit(g._gkey, "bill_number") !== undefined
+                              || customerEdit(g._gkey, "bag_count") !== undefined;
                             const anyDispatchDirty = (g.dispatches || []).some(
                               (d) => (edits[`dispatch:${d.id}`] && Object.keys(edits[`dispatch:${d.id}`]).length > 0),
                             );
                             const anyEditable = (g.dispatches || []).some((d) => d.can_edit !== false);
-                            const isSaving = savingKey === `party:${g.customer_id}`;
+                            const isSaving = savingKey === `party:${g._gkey}`;
                             return (
                               <div className="col-span-2 flex">
                                 <Button
                                   size="sm"
-                                  onClick={() => saveAllForParty(g.customer_id, g.dispatches)}
+                                  onClick={() => saveAllForParty(g.customer_id, g.dispatches, g._gkey)}
                                   disabled={(!partyDirty && !anyDispatchDirty) || isSaving || !anyEditable}
                                   data-testid={`report-save-all-${g.customer_id}`}
                                   className="bg-[#E65100] hover:bg-[#CC4800] text-white rounded-sm h-9 w-full disabled:opacity-40"

@@ -3086,10 +3086,7 @@ async def dispatch_execute(body: DispatchExecuteIn, user=Depends(require_action(
     # from item pricing — it must be entered manually by the operator in
     # Daily Report / Dispatch Ledger edit. New dispatches start at 0.
     dispatch_ts = _resolve_dispatch_ts(body.dispatched_at)
-    existing = await _find_open_dispatch_today(
-        order["customer_id"], order["customer_name"], for_iso_ts=dispatch_ts,
-        price_list_id=cust_price_list,
-    )
+    existing = None  # every dispatch gets its own slip (no same-day merge)
     if existing:
         merged_items = _merge_dispatch_lines(existing.get("items") or [], dispatched_lines)
         merged_total_pcs = sum(int(it.get("quantity") or 0) for it in merged_items)
@@ -4593,7 +4590,8 @@ async def daily_dispatch_report(date: Optional[str] = None, end_date: Optional[s
         # they were dispatched — one group per (day, customer) — so the report
         # reads date-wise instead of merging a customer's whole range together.
         day = _ist_day(d.get("dispatched_at"))
-        gkey = f"{day}|{cid}" if range_mode else cid
+        # Every dispatch is its own slip → its own card in the report.
+        gkey = d.get("id") or f"{day}|{cid}"
         cust = customers_cache.get(cid)
         if cust is None and cid != "unknown":
             cust = await db.customers.find_one({"id": cid}, {"_id": 0}) or {}
@@ -4605,6 +4603,7 @@ async def daily_dispatch_report(date: Optional[str] = None, end_date: Optional[s
             pl_id = cust.get("price_list_id")
             pl_meta = await _price_list_meta(pl_id)
             g = {
+                "group_key": gkey,
                 "customer_id": cid,
                 "day": day,
                 "customer_name": d.get("customer_name") or cust.get("name") or "—",
@@ -6267,7 +6266,7 @@ async def dispatch_off_order(body: OffOrderDispatchIn, user=Depends(require_acti
     # MERGE into today's existing slip for this customer if one exists, so
     # multiple same-day dispatches to one party produce ONE slip.
     dispatch_ts = _resolve_dispatch_ts(body.dispatched_at)
-    existing = await _find_open_dispatch_today(customer_id, customer_name, for_iso_ts=dispatch_ts, price_list_id=cust_price_list)
+    existing = None  # every dispatch gets its own slip (no same-day merge)
     if existing:
         merged_items = _merge_dispatch_lines(existing.get("items") or [], dispatched_lines)
         merged_total_pcs = sum(int(it.get("quantity") or 0) for it in merged_items)
