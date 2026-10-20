@@ -2,6 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import io
@@ -9850,6 +9851,7 @@ async def api_health():
     return {"status": "ok"}
 
 
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -9888,8 +9890,43 @@ async def migrate_add_permissions() -> int:
     return n
 
 
+_PERF_INDEXES = {
+    "orders": ["id", "customer_id", "status", "created_at"],
+    "dispatches": ["id", "customer_id", "dispatched_at", "order_id"],
+    "customers": ["id", "name", "price_list_id"],
+    "items": ["id", "product_id"],
+    "products": ["id"],
+    "users": ["id", "email", "username"],
+    "price_lists": ["id"],
+    "price_list_items": ["price_list_id", "item_id"],
+    "price_list_category_discounts": ["price_list_id"],
+    "suppliers": ["id"],
+    "supplier_purchases": ["id", "supplier_id"],
+    "raw_materials": ["id"],
+    "transports": ["id"],
+    "notifications": ["user_id"],
+    "login_attestations": ["user_id", "created_at"],
+    "order_activity": ["order_id"],
+}
+
+
+async def _ensure_perf_indexes():
+    for database in (_main_db, _blank_db):
+        for coll, fields in _PERF_INDEXES.items():
+            for f in fields:
+                try:
+                    await database[coll].create_index(f)
+                except Exception as e:
+                    logger.warning(f"index {coll}.{f} skipped: {e}")
+        try:
+            await database.price_list_items.create_index([("price_list_id", 1), ("item_id", 1)])
+        except Exception:
+            pass
+
+
 @app.on_event("startup")
 async def on_startup():
+    await _ensure_perf_indexes()
     await seed_db()
     await migrate_add_permissions()
     # Backfill: ensure every raw material has a numeric `stock_on_hand`.
