@@ -9687,17 +9687,57 @@ _ACTIVITY_SECRET_KEYS = {"password", "new_password", "old_password", "token", "o
 _UUIDISH = re.compile(r"^[0-9a-f]{8}-[0-9a-f-]{20,}$|^[0-9a-f]{24}$|^\d+$", re.I)
 
 
-def _activity_summary(body: Any) -> Dict[str, Any]:
+_ACTIVITY_REF_COLLECTIONS = {
+    "customer_id": ("customers", "customer"), "supplier_id": ("suppliers", "vendor"),
+    "item_id": ("items", "item"), "product_id": ("products", "product"),
+    "price_list_id": ("price_lists", "price list"), "raw_material_id": ("raw_materials", "raw material"),
+    "transport_id": ("transports", "transport"), "vendor_price_list_id": ("vendor_price_lists", "vendor price list"),
+    "from_price_list_id": ("price_lists", "from price list"),
+}
+
+
+async def _activity_ref_name(key: str, val: Any, cache: Dict[str, str]) -> Optional[str]:
+    ref = _ACTIVITY_REF_COLLECTIONS.get(key)
+    if not ref or not isinstance(val, str) or not val:
+        return None
+    ck = f"{ref[0]}:{val}"
+    if ck not in cache:
+        doc = await _main_db[ref[0]].find_one({"id": val}, {"_id": 0, "name": 1})
+        cache[ck] = (doc or {}).get("name") or val[:8]
+    return cache[ck]
+
+
+async def _activity_line(line: Dict[str, Any], cache: Dict[str, str]) -> str:
+    name = line.get("item_name") or line.get("name") or line.get("product_name")
+    if not name:
+        for k in ("item_id", "raw_material_id", "product_id"):
+            name = await _activity_ref_name(k, line.get(k), cache)
+            if name:
+                break
+    qty = line.get("quantity", line.get("qty"))
+    return f"{name or 'item'}" + (f" × {qty}" if qty not in (None, "") else "")
+
+
+async def _activity_summary(body: Any, cache: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """Readable snapshot of a request body: ids → names, item lists → 'Name × qty'."""
     if not isinstance(body, dict):
         return {}
+    cache = {} if cache is None else cache
     out: Dict[str, Any] = {}
     for k, v in body.items():
-        if k in _ACTIVITY_SECRET_KEYS or len(out) >= 15:
+        if k in _ACTIVITY_SECRET_KEYS or len(out) >= 20:
             continue
-        if isinstance(v, (str, int, float, bool)) or v is None:
+        if k in _ACTIVITY_REF_COLLECTIONS:
+            out[_ACTIVITY_REF_COLLECTIONS[k][1]] = await _activity_ref_name(k, v, cache) if v else v
+        elif isinstance(v, (str, int, float, bool)) or v is None:
             out[k] = v if not isinstance(v, str) else v[:120]
         elif isinstance(v, list):
-            out[k] = f"[{len(v)} item(s)]"
+            if v and all(isinstance(x, dict) for x in v):
+                lines = [await _activity_line(x, cache) for x in v[:15]]
+                more = f" (+{len(v) - 15} more)" if len(v) > 15 else ""
+                out[k] = ", ".join(lines) + more
+            else:
+                out[k] = f"[{len(v)} item(s)]"
     return out
 
 
@@ -9738,6 +9778,7 @@ async def activity_log_middleware(request: Request, call_next):
         record_id = next((p for p in parts if _UUIDISH.match(p)), None)
         module_parts = [p for p in parts if not _UUIDISH.match(p)]
         action = {"POST": "add", "PUT": "edit", "PATCH": "edit", "DELETE": "delete"}[method]
+        details = await _activity_summary(body_json)
         await _main_db.activity_logs.insert_one({
             "id": str(uuid.uuid4()),
             "user_id": user.get("id"),
@@ -9748,8 +9789,8 @@ async def activity_log_middleware(request: Request, call_next):
             "module": module_parts[0] if module_parts else "",
             "path": "/" + "/".join(module_parts),
             "record_id": record_id,
-            "target": _activity_target(body_json),
-            "details": _activity_summary(body_json),
+            "target": _activity_target(body_json) or details.get("customer") or details.get("vendor") or "",
+            "details": details,
             "method": method,
             "status_code": response.status_code,
             "success": response.status_code < 400,
@@ -9780,6 +9821,13 @@ async def list_activity_logs(
     total = await _main_db.activity_logs.count_documents(q)
     items = await _main_db.activity_logs.find(q, {"_id": 0}).sort("created_at", -1) \
         .skip(max(0, int(skip))).limit(max(1, min(500, int(limit)))).to_list(500)
+    cache: Dict[str, str] = {}
+    for it in items:  # older entries stored raw ids — show names instead
+        det = it.get("details") or {}
+        if any(k in _ACTIVITY_REF_COLLECTIONS for k in det):
+            it["details"] = await _activity_summary(det, cache)
+            if not it.get("target"):
+                it["target"] = it["details"].get("customer") or it["details"].get("vendor") or ""
     return {"total": total, "items": items}
 
 

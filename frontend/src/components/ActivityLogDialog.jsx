@@ -43,7 +43,7 @@ function LogRow({ log }) {
       {details.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {details.map(([k, v]) => (
-            <span key={k} className="text-[10px] bg-slate-50 border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded-sm break-all">
+            <span key={k} className="text-[10px] bg-slate-50 border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded-sm break-words max-w-full">
               {k}: <span className="font-bold text-slate-800">{String(v ?? "—")}</span>
             </span>
           ))}
